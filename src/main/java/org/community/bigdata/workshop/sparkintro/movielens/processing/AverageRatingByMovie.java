@@ -42,10 +42,8 @@ public class AverageRatingByMovie {
                 .groupByKey()
                 .mapValues(AverageRatingByMovie::computeAverage)
                 .map(i -> new Tuple2<>(i._1(), i._2()))
-                //all in memory on one :(
-                .collect().stream()
-                .sorted((i,j) -> i._2().compareTo(j._2()))
-                .forEach(AverageRatingByMovie::dump);
+                .sortBy(Tuple2::_2, true, 1)
+                .foreach(AverageRatingByMovie::dump);
 
         //TODO: spark way w/ aggregate & sort cross partitions??
     }
