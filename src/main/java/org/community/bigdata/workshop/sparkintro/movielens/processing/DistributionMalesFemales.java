@@ -10,7 +10,8 @@ import org.community.bigdata.workshop.sparkintro.movielens.model.User;
 import scala.Tuple2;
 
 /**
- * Created by tudorl on 07/12/15.
+ * @author flo
+ * @since 16/12/15.
  */
 public class DistributionMalesFemales {
     public static void main(String[] args) {

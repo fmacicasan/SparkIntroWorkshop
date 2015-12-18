@@ -11,7 +11,8 @@ import org.community.bigdata.workshop.sparkintro.movielens.functions.wordcount.W
 import scala.Tuple2;
 
 /**
- * Created by tudorl on 07/12/15.
+ * @author flo
+ * @since 16/12/15.
  */
 public class MaleFemales {
     public static void main(String[] args) {

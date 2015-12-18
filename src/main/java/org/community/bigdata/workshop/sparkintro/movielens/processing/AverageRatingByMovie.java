@@ -4,30 +4,26 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.PairFunction;
-import org.apache.spark.api.java.function.VoidFunction;
+import org.apache.spark.api.java.function.Function2;
 import org.community.bigdata.workshop.sparkintro.movielens.functions.conversion.MovieConvertion;
 import org.community.bigdata.workshop.sparkintro.movielens.functions.conversion.RatingConvertion;
-import org.community.bigdata.workshop.sparkintro.movielens.functions.conversion.UserConversion;
 import org.community.bigdata.workshop.sparkintro.movielens.model.Movie;
 import org.community.bigdata.workshop.sparkintro.movielens.model.Rating;
-import org.community.bigdata.workshop.sparkintro.movielens.model.User;
 import scala.Tuple2;
 
 import java.io.Serializable;
-import java.util.List;
+import java.util.Optional;
+import java.util.stream.StreamSupport;
 
 /**
  * @author flo
- * @since 16/12/15.
+ * @since 18/12/15.
  */
-public class MoviesWithRatingX {
+public class AverageRatingByMovie {
     public static void main(String[] args) {
-        SparkConf conf = new SparkConf().setMaster("local[4]").setAppName("MoviesWithRatingX");
+        SparkConf conf = new SparkConf().setMaster("local[4]").setAppName("AverageRatingByMovie");
         conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
         JavaSparkContext sc = new JavaSparkContext(conf);
-
-        double targetRating = 3d;
 
         JavaRDD<String> movie_records = sc.textFile("data/movielens/input/movies");
         JavaRDD<String> rating_records = sc.textFile("data/movielens/input/ratings");
@@ -41,16 +37,27 @@ public class MoviesWithRatingX {
                 movies.mapToPair(movie -> new Tuple2<>(movie.getId(), movie));
 
         JavaPairRDD<Integer, Tuple2<Movie, Rating>> join = moviePairRDD.join(ratingPairRDD);
-        JavaPairRDD<Integer, Tuple2<Movie, Rating>> filtered =
-                join.filter(i -> Double.compare(i._2()._2().getRating(), targetRating) == 0);
 
-        filtered.map(i -> i._2()._1().getMovieTitle())
-                .distinct()
-                .foreach(MoviesWithRatingX::dump);
+        //java 8 way with hacky compute average
+        join.groupByKey()
+                .map(AverageRatingByMovie::computeAverage)
+                .sortBy(Tuple2::_2, true, 4)
+                .foreach(AverageRatingByMovie::dump);
+
+        //TODO: spark way w/ aggregate ?
     }
 
     //TODO: investigate why explicit method reference to System.out::println returns serialization exception
-    private static void dump(String someString) {
+    private static void dump(Object someString) {
         System.out.println(someString);
+    }
+
+    private static Tuple2<String, Double> computeAverage(Tuple2<Integer, Iterable<Tuple2<Movie, Rating>>> tuple) {
+        Iterable<Tuple2<Movie, Rating>> ratings = tuple._2();
+        double average = StreamSupport.stream(ratings.spliterator(), false)
+                .mapToDouble(i -> i._2().getRating())
+                .average().orElse(0d);
+        String name = ratings.iterator().hasNext() ?  ratings.iterator().next()._1().getMovieTitle():"default";
+        return new Tuple2<>(name, average);
     }
 }
