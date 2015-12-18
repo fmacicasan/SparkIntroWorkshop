@@ -41,6 +41,7 @@ public class AverageRatingByMovie {
         join.mapToPair(AverageRatingByMovie::convertToMovieRating)
                 .groupByKey()
                 .mapValues(AverageRatingByMovie::computeAverage)
+                //need to convert from java pair rdd to java rdd for nicer sortBy
                 .map(i -> new Tuple2<>(i._1(), i._2()))
                 .sortBy(Tuple2::_2, true, 1)
                 .foreach(AverageRatingByMovie::dump);
