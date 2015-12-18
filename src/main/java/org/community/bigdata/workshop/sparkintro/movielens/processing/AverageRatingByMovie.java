@@ -4,15 +4,13 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFunction;
 import org.community.bigdata.workshop.sparkintro.movielens.functions.conversion.MovieConvertion;
 import org.community.bigdata.workshop.sparkintro.movielens.functions.conversion.RatingConvertion;
 import org.community.bigdata.workshop.sparkintro.movielens.model.Movie;
 import org.community.bigdata.workshop.sparkintro.movielens.model.Rating;
 import scala.Tuple2;
 
-import java.io.Serializable;
-import java.util.Optional;
 import java.util.stream.StreamSupport;
 
 /**
@@ -38,13 +36,22 @@ public class AverageRatingByMovie {
 
         JavaPairRDD<Integer, Tuple2<Movie, Rating>> join = moviePairRDD.join(ratingPairRDD);
 
+        join.cache();
         //java 8 way with hacky compute average
-        join.groupByKey()
-                .map(AverageRatingByMovie::computeAverage)
-                .sortBy(Tuple2::_2, true, 4)
-                .foreach(AverageRatingByMovie::dump);
+        join.mapToPair(AverageRatingByMovie::convertToMovieRating)
+                .groupByKey()
+                .mapValues(AverageRatingByMovie::computeAverage)
+                .map(i -> new Tuple2<>(i._1(), i._2()))
+                //all in memory on one :(
+                .collect().stream()
+                .sorted((i,j) -> i._2().compareTo(j._2()))
+                .forEach(AverageRatingByMovie::dump);
 
-        //TODO: spark way w/ aggregate ?
+        //TODO: spark way w/ aggregate & sort cross partitions??
+    }
+
+    private static Tuple2<String, Float> convertToMovieRating(Tuple2<Integer, Tuple2<Movie, Rating>> movieRating) {
+        return new Tuple2<>(movieRating._2()._1().getMovieTitle(), movieRating._2()._2().getRating());
     }
 
     //TODO: investigate why explicit method reference to System.out::println returns serialization exception
@@ -52,12 +59,9 @@ public class AverageRatingByMovie {
         System.out.println(someString);
     }
 
-    private static Tuple2<String, Double> computeAverage(Tuple2<Integer, Iterable<Tuple2<Movie, Rating>>> tuple) {
-        Iterable<Tuple2<Movie, Rating>> ratings = tuple._2();
-        double average = StreamSupport.stream(ratings.spliterator(), false)
-                .mapToDouble(i -> i._2().getRating())
+    private static Double computeAverage(Iterable<Float> tuple) {
+        return StreamSupport.stream(tuple.spliterator(), false)
+                .mapToDouble(i -> i)
                 .average().orElse(0d);
-        String name = ratings.iterator().hasNext() ?  ratings.iterator().next()._1().getMovieTitle():"default";
-        return new Tuple2<>(name, average);
     }
 }
